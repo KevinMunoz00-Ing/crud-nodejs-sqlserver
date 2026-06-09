@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>CRUD Usuarios 2K "LUCHEX" </title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 20px; color: #333; }
+    h2 { margin-bottom: 10px; color: #444; }
+
+    .contenedor { max-width: 900px; margin: auto; }
+
+    .formulario {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    .formulario input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .formulario button {
+      width: 100%;
+      padding: 10px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .formulario button:hover { background: #45a049; }
+
+    .tabla-contenedor {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
+    th { background: #f0f0f0; font-weight: bold; }
+    tr:hover { background: #fafafa; }
+
+    .btn-editar {
+      background: #2196F3;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 5px;
+    }
+
+    .btn-eliminar {
+      background: #f44336;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .btn-editar:hover { background: #1976D2; }
+    .btn-eliminar:hover { background: #d32f2f; }
+
+    .mensaje {
+      text-align: center;
+      padding: 10px;
+      margin-bottom: 15px;
+      border-radius: 6px;
+      display: none;
+    }
+
+    .mensaje.exito { background: #dff0d8; color: #3c763d; display: block; }
+    .mensaje.error  { background: #f2dede; color: #a94442; display: block; }
+  </style>
+</head>
+<body>
+
+<div class="contenedor">
+  <h1>CRUD de Usuarios LUCHEX "2K"</h1>
+
+  <div id="mensaje" class="mensaje"></div>
+
+  <!-- Formulario -->
+  <div class="formulario">
+    <h2 id="titulo-form">Agregar Usuario</h2>
+    <input type="hidden" id="usuario-id">
+    <input type="text"   id="nombre" placeholder="Nombre completo">
+    <input type="email"  id="email"  placeholder="Email">
+    <input type="number" id="edad"   placeholder="Edad">
+    <button onclick="guardarUsuario()">Guardar</button>
+    <button onclick="cancelarEdicion()" id="btn-cancelar"
+      style="background:#888; margin-top:8px; display:none">
+      Cancelar
+    </button>
+  </div>
+
+  <!-- Tabla -->
+  <div class="tabla-contenedor">
+    <h2>Lista de Usuarios</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Email</th>
+          <th>Edad</th>
+          <th>Creado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tabla-usuarios">
+        <tr><td colspan="6" style="text-align:center">Cargando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const API = 'http://localhost:3000/api/users';
+
+  // Mostrar mensaje
+  function mostrarMensaje(texto, tipo) {
+    const el = document.getElementById('mensaje');
+    el.textContent = texto;
+    el.className = `mensaje ${tipo}`;
+    setTimeout(() => el.className = 'mensaje', 3000);
+  }
+
+  // Cargar todos los usuarios
+  async function cargarUsuarios() {
+    try {
+      const res = await fetch(API);
+      const usuarios = await res.json();
+      const tbody = document.getElementById('tabla-usuarios');
+
+      if (usuarios.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">No hay usuarios registrados</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = usuarios.map(u => `
+        <tr>
+          <td>${u.id}</td>
+          <td>${u.nombre}</td>
+          <td>${u.email}</td>
+          <td>${u.edad ?? '-'}</td>
+          <td>${new Date(u.creado_en).toLocaleDateString('es-PE')}</td>
+          <td>
+            <button class="btn-editar"   onclick="editarUsuario(${u.id}, '${u.nombre}', '${u.email}', ${u.edad})">Editar</button>
+            <button class="btn-eliminar" onclick="eliminarUsuario(${u.id})">Eliminar</button>
+          </td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      mostrarMensaje('Error al cargar usuarios', 'error');
+    }
+  }
+
+  // Guardar — crea o edita según si hay ID
+  async function guardarUsuario() {
+    const id     = document.getElementById('usuario-id').value;
+    const nombre = document.getElementById('nombre').value.trim();
+    const email  = document.getElementById('email').value.trim();
+    const edad   = document.getElementById('edad').value;
+
+    if (!nombre || !email) {
+      mostrarMensaje('Nombre y email son obligatorios', 'error');
+      return;
+    }
+
+    const body = { nombre, email, edad: edad ? parseInt(edad) : null };
+    const url    = id ? `${API}/${id}` : API;
+    const method = id ? 'PUT' : 'POST';
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        mostrarMensaje(err.error, 'error');
+        return;
+      }
+
+      mostrarMensaje(id ? 'Usuario actualizado' : 'Usuario creado', 'exito');
+      limpiarFormulario();
+      cargarUsuarios();
+    } catch (err) {
+      mostrarMensaje('Error al guardar', 'error');
+    }
+  }
+
+  // Llenar formulario para editar
+  function editarUsuario(id, nombre, email, edad) {
+    document.getElementById('usuario-id').value = id;
+    document.getElementById('nombre').value     = nombre;
+    document.getElementById('email').value      = email;
+    document.getElementById('edad').value       = edad;
+    document.getElementById('titulo-form').textContent = 'Editar Usuario';
+    document.getElementById('btn-cancelar').style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // Eliminar usuario
+  async function eliminarUsuario(id) {
+    if (!confirm('¿Estás seguro de eliminar este usuario?')) return;
+
+    try {
+      const res = await fetch(`${API}/${id}`, { method: 'DELETE' });
+      if (res.status === 204) {
+        mostrarMensaje('Usuario eliminado', 'exito');
+        cargarUsuarios();
+      }
+    } catch (err) {
+      mostrarMensaje('Error al eliminar', 'error');
+    }
+  }
+
+  // Limpiar formulario
+  function limpiarFormulario() {
+    document.getElementById('usuario-id').value = '';
+    document.getElementById('nombre').value     = '';
+    document.getElementById('email').value      = '';
+    document.getElementById('edad').value       = '';
+    document.getElementById('titulo-form').textContent = 'Agregar Usuario';
+    document.getElementById('btn-cancelar').style.display = 'none';
+  }
+
+  function cancelarEdicion() { limpiarFormulario(); }
+
+  // Cargar al inicio
+  cargarUsuarios();
+</script>
+
+</body>
+</html>
