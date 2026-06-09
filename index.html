@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>CRUD Usuarios 2K "LUCHEX" </title>
+  <title>CRUD Usuarios</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
@@ -10,6 +10,21 @@
     h2 { margin-bottom: 10px; color: #444; }
 
     .contenedor { max-width: 900px; margin: auto; }
+
+    /* LOGIN */
+    #pantalla-login {
+      max-width: 400px;
+      margin: 80px auto;
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    #pantalla-login h2 { text-align: center; margin-bottom: 20px; }
+
+    /* CRUD */
+    #pantalla-crud { display: none; }
 
     .formulario {
       background: white;
@@ -72,8 +87,19 @@
       cursor: pointer;
     }
 
-    .btn-editar:hover { background: #1976D2; }
+    .btn-logout {
+      background: #888;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      float: right;
+    }
+
+    .btn-editar:hover   { background: #1976D2; }
     .btn-eliminar:hover { background: #d32f2f; }
+    .btn-logout:hover   { background: #666; }
 
     .mensaje {
       text-align: center;
@@ -84,17 +110,43 @@
     }
 
     .mensaje.exito { background: #dff0d8; color: #3c763d; display: block; }
-    .mensaje.error  { background: #f2dede; color: #a94442; display: block; }
+    .mensaje.error { background: #f2dede; color: #a94442; display: block; }
+
+    .usuario-info {
+      text-align: right;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: #666;
+    }
   </style>
 </head>
 <body>
 
-<div class="contenedor">
-  <h1>CRUD de Usuarios LUCHEX "2K"</h1>
+<!-- PANTALLA LOGIN -->
+<div id="pantalla-login">
+  <h2>Iniciar Sesión</h2>
+  <div id="mensaje-login" class="mensaje"></div>
+  <input type="email"    id="login-email"    placeholder="Email">
+  <input type="password" id="login-password" placeholder="Contraseña">
+  <button onclick="login()" style="margin-top:10px; width:100%; padding:10px;
+    background:#4CAF50; color:white; border:none; border-radius:6px;
+    font-size:15px; cursor:pointer;">
+    Entrar
+  </button>
+</div>
+
+<!-- PANTALLA CRUD -->
+<div id="pantalla-crud" class="contenedor">
+
+  <div class="usuario-info">
+    <span id="usuario-email"></span>
+    <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
+  </div>
+
+  <h1>CRUD de Usuarios</h1>
 
   <div id="mensaje" class="mensaje"></div>
 
-  <!-- Formulario -->
   <div class="formulario">
     <h2 id="titulo-form">Agregar Usuario</h2>
     <input type="hidden" id="usuario-id">
@@ -108,7 +160,6 @@
     </button>
   </div>
 
-  <!-- Tabla -->
   <div class="tabla-contenedor">
     <h2>Lista de Usuarios</h2>
     <table>
@@ -131,21 +182,79 @@
 
 <script>
   const API = 'http://localhost:3000/api/users';
+  const AUTH = 'http://localhost:3000/api/auth';
+  let token = null;
+
+  // Headers con token
+  function headers() {
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+  }
 
   // Mostrar mensaje
-  function mostrarMensaje(texto, tipo) {
-    const el = document.getElementById('mensaje');
+  function mostrarMensaje(texto, tipo, loginForm = false) {
+    const id = loginForm ? 'mensaje-login' : 'mensaje';
+    const el = document.getElementById(id);
     el.textContent = texto;
     el.className = `mensaje ${tipo}`;
     setTimeout(() => el.className = 'mensaje', 3000);
   }
 
+  // LOGIN
+  async function login() {
+    const email    = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+
+    if (!email || !password) {
+      mostrarMensaje('Email y contraseña son obligatorios', 'error', true);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${AUTH}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        mostrarMensaje(data.error, 'error', true);
+        return;
+      }
+
+      // Guardar token y mostrar CRUD
+      token = data.token;
+      document.getElementById('pantalla-login').style.display = 'none';
+      document.getElementById('pantalla-crud').style.display  = 'block';
+      document.getElementById('usuario-email').textContent    = email;
+      cargarUsuarios();
+    } catch (err) {
+      mostrarMensaje('Error al conectar con el servidor', 'error', true);
+    }
+  }
+
+  // LOGOUT
+  function logout() {
+    token = null;
+    document.getElementById('pantalla-login').style.display = 'block';
+    document.getElementById('pantalla-crud').style.display  = 'none';
+    document.getElementById('login-email').value            = '';
+    document.getElementById('login-password').value         = '';
+  }
+
   // Cargar todos los usuarios
   async function cargarUsuarios() {
     try {
-      const res = await fetch(API);
+      const res = await fetch(API, { headers: headers() });
+
+      if (res.status === 401) { logout(); return; }
+
       const usuarios = await res.json();
-      const tbody = document.getElementById('tabla-usuarios');
+      const tbody    = document.getElementById('tabla-usuarios');
 
       if (usuarios.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">No hay usuarios registrados</td></tr>';
@@ -170,7 +279,7 @@
     }
   }
 
-  // Guardar — crea o edita según si hay ID
+  // Guardar — crea o edita
   async function guardarUsuario() {
     const id     = document.getElementById('usuario-id').value;
     const nombre = document.getElementById('nombre').value.trim();
@@ -182,16 +291,18 @@
       return;
     }
 
-    const body = { nombre, email, edad: edad ? parseInt(edad) : null };
+    const body   = { nombre, email, edad: edad ? parseInt(edad) : null };
     const url    = id ? `${API}/${id}` : API;
     const method = id ? 'PUT' : 'POST';
 
     try {
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers(),
         body: JSON.stringify(body)
       });
+
+      if (res.status === 401) { logout(); return; }
 
       if (!res.ok) {
         const err = await res.json();
@@ -207,23 +318,29 @@
     }
   }
 
-  // Llenar formulario para editar
+  // Editar
   function editarUsuario(id, nombre, email, edad) {
     document.getElementById('usuario-id').value = id;
     document.getElementById('nombre').value     = nombre;
     document.getElementById('email').value      = email;
     document.getElementById('edad').value       = edad;
-    document.getElementById('titulo-form').textContent = 'Editar Usuario';
-    document.getElementById('btn-cancelar').style.display = 'block';
+    document.getElementById('titulo-form').textContent      = 'Editar Usuario';
+    document.getElementById('btn-cancelar').style.display   = 'block';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  // Eliminar usuario
+  // Eliminar
   async function eliminarUsuario(id) {
     if (!confirm('¿Estás seguro de eliminar este usuario?')) return;
 
     try {
-      const res = await fetch(`${API}/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API}/${id}`, {
+        method: 'DELETE',
+        headers: headers()
+      });
+
+      if (res.status === 401) { logout(); return; }
+
       if (res.status === 204) {
         mostrarMensaje('Usuario eliminado', 'exito');
         cargarUsuarios();
@@ -239,14 +356,11 @@
     document.getElementById('nombre').value     = '';
     document.getElementById('email').value      = '';
     document.getElementById('edad').value       = '';
-    document.getElementById('titulo-form').textContent = 'Agregar Usuario';
+    document.getElementById('titulo-form').textContent    = 'Agregar Usuario';
     document.getElementById('btn-cancelar').style.display = 'none';
   }
 
   function cancelarEdicion() { limpiarFormulario(); }
-
-  // Cargar al inicio
-  cargarUsuarios();
 </script>
 
 </body>
