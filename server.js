@@ -1,14 +1,20 @@
 require('dotenv').config();
-const express = require('express');
-const cors    = require('cors');        // ← agrega esta línea
-const users   = require('./routes/users');
+const express      = require('express');
+const cors         = require('cors');
+const users        = require('./routes/users');
+const auth         = require('./routes/auth');
+const verificarToken = require('./middleware/auth');
 
 const app = express();
 
-app.use(cors());                        // ← agrega esta línea
+app.use(cors());
 app.use(express.json());
 
-app.use('/api/users', users);
+// Rutas públicas — no necesitan token
+app.use('/api/auth', auth);
+
+// Rutas protegidas — necesitan token
+app.use('/api/users', verificarToken, users);
 
 app.get('/', (req, res) => {
   res.json({ mensaje: 'API CRUD corriendo correctamente ✓' });
